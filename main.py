@@ -1,18 +1,27 @@
 import numpy as np
+import pandas as pd
 from model import Graph
 import matplotlib.pyplot as plt
 
 g = Graph()
-g.add_node("cad", storage_type="cat", values=["high", "low", "none"], probs=[0.1, 0.3, 0.6])
-g.add_node("mi", storage_type="cont", mean=4, standard_deviation=1)
-g.add_node("bmi", storage_type="cont", mean=26, standard_deviation=4)
-g.add_node("diabetes", storage_type="cat", values=["yes", "no"], probs=[0.3, 0.7])
 
-g.add_edge("cad", "mi")
-g.add_edge("bmi", "mi")
-g.add_edge("bmi", "cad")
-g.add_edge("diabetes", "bmi")
-g.add_edge("diabetes", "cad")
+# a testing dataset from kaggle
+df = pd.read_csv("/Users/sakinkirti/Downloads/heart_disease.csv")
+for col in ["currentSmoker", "BPMeds", "prevalentHyp", "diabetes"]:
+    df[col] = df[col].map(lambda x: np.where(x == 1, "yes", "no"))
+
+# load just the nodes from 
+g.load_nodes_from_dataframe(df)
+
+# add specific edges
+g.add_edge("cigsPerDay", "currentSmoker")
+g.add_edge("cigsPerDay", "heartRate")
+g.add_edge("BMI", "heartRate")
+g.add_edge("glucose", "diabetes")
+g.add_edge("totChol", "prevalentStroke")
+g.add_edge("BMI", "diabetes")
 
 vis = g.visualize_graph(42)
 plt.show()
+
+print(g)

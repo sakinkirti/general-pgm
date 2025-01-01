@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Literal
 
@@ -21,7 +22,7 @@ class Graph:
 
         res = ""
         for k,v in self.graph.items():
-            res += f"{v.__str__()}: {v.get_outgoing()}\n"
+            res += f"{v.__str__()}\n"
             
         return res
             
@@ -81,7 +82,29 @@ class Graph:
             for neighbor in neighbors:
                 ax.arrow(pos[node][0], pos[node][1], pos[neighbor][0]-pos[node][0], pos[neighbor][1]-pos[node][1], shape='full', lw=0, length_includes_head=True, head_width=.01, color="black")
 
+        # remove some unnecessary formatting
+        ax.set_xticks([])
+        ax.set_yticks([])
+
         return ax
+
+    def load_nodes_from_dataframe(self, dataframe:pd.DataFrame):
+        
+        # basic inference of the type of data for easy automated loading
+        def infer_storage_type(values:pd.Series):
+            if values.dtype == "float64" or values.dtype == "int64":
+                return "cont"
+            else:
+                return "cat"
+
+        # add a node for each column
+        for col in dataframe.columns:
+            st = infer_storage_type(dataframe[col])
+            
+            if st == "cat":
+                self.add_node(col, storage_type=st, values=dataframe[col].unique().tolist(), probs=dataframe[col].value_counts().values/len(dataframe))
+            else:
+                self.add_node(col, storage_type=st, mean=dataframe[col].mean(), standard_deviation=dataframe[col].std())
 
     class CategoricalNode:
         
@@ -107,7 +130,7 @@ class Graph:
                 str: the Node as a string
             """
             
-            return f"Node(name:{self.name}, values:{list(self.table.keys())})"
+            return f"{self.name}\tCategorical\t{self.table}\tOutoing Edges={self.outgoing}"
         
         def add_incoming(self, source:str): self.incoming.append(source)
         def add_outgoing(self, destination:str): self.outgoing.append(destination)
@@ -142,7 +165,7 @@ class Graph:
                 str: the Node as a string
             """
             
-            return f"Node(name:{self.name}, mean:{self.mean}, sd:{self.sd})"
+            return f"{self.name}\tContinuous\t\u007bmean: {self.mean}, sd:{self.sd}\u007d\tOutgoing Edges={self.outgoing}"
         
         def add_incoming(self, source:str): self.incoming.append(source)
         def add_outgoing(self, destination:str): self.outgoing.append(destination)
