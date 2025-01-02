@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import matplotlib.pyplot as plt
 from typing import Literal
 
-class Graph:
+class ProbabilisticGraph:
     
     def __init__(self):
         
@@ -89,6 +90,14 @@ class Graph:
         return ax
 
     def load_nodes_from_dataframe(self, dataframe:pd.DataFrame):
+        """loads nodes from a given dataframe
+
+        Args:
+            dataframe (pd.DataFrame): the dataframe to load nodes from
+
+        Returns:
+            None: stores the data in graph format
+        """
         
         # basic inference of the type of data for easy automated loading
         def infer_storage_type(values:pd.Series):
@@ -105,6 +114,44 @@ class Graph:
                 self.add_node(col, storage_type=st, values=dataframe[col].unique().tolist(), probs=dataframe[col].value_counts().values/len(dataframe))
             else:
                 self.add_node(col, storage_type=st, mean=dataframe[col].mean(), standard_deviation=dataframe[col].std())
+
+    def infer_edges(self):
+        pass
+
+    def query(self, node:str, value, operation:str="equals"):
+        """with base value, calculate the probability of a particular node
+
+        Args:
+            node (str): the node to calculate probability for
+            value (str, int, float): the value to check probability for
+            operation (str, optional): if value is numerical, the operation to check probability for. Defaults to "equals".
+
+        Returns:
+            float: the probability of the particular value at the given node
+        """
+        
+        # if the node is categorical, just return the probability of that value
+        if type(self.graph[node]) is self.CategoricalNode and type(value) is str:
+            return self.graph[node].get_probs(value)
+        # if it's continuous, return the probability of the operation to the value
+        elif type(self.graph[node]) is self.ContinuousNode and type(value) is not str:
+            return self.graph[node].get_probs(value, operation)
+
+    def conditional_query(self, node:str, value, operation:str="equals", conditional_nodes:list=None, conditional_values:list=None):
+        
+        # if there are no conditions, this reverts to regular inference
+        if conditional_nodes is None:
+            print("You provided no conditional nodes, defaulting to normal inference")
+            return self.inference(node, value, operation)
+        
+        # Bayes' Rule with multiple conditions
+        #if type(node) is self.CategoricalNode:
+        num = np.prod(np.array([self.graph[node].get_probs(value) * self.graph[cn].get_probs(cv) for cn,cv in zip(conditional_nodes, conditional_values)] + [self.graph[node].get_probs(value)**(len(conditional_nodes)+1)]))
+        den = np.sum(np.array([
+            np.prod(np.array([self.graph[node].get_probs(value) * self.graph[cn].get_probs(cv) for cn,cv in zip(conditional_nodes, conditional_values)] + [self.graph[node].get_probs(value)**(len(conditional_nodes)+1)])),
+            np.prod(np.array([(1 - self.graph[node].get_probs(value)) * self.graph[cn].get_probs(cv) for cn,cv in zip(conditional_nodes, conditional_values)] + [(1 - self.graph[node].get_probs(value))**(len(conditional_nodes)+1)]))
+        ]))
+        return num / den
 
     class CategoricalNode:
         
@@ -140,6 +187,8 @@ class Graph:
             
         def get_name(self): return self.name
         
+        def get_probs(self, value:str): return self.table[value]
+        
     class ContinuousNode:
         
         def __init__(self, name:str, mean:float, standard_deviation:float):
@@ -174,4 +223,25 @@ class Graph:
         def get_outgoing(self): return self.outgoing
             
         def get_name(self): return self.name
+        
+        def get_probs(self, value:float, operation:Literal["equals", "greater", "less"]):
+            """computes probability of a particular continuous value
+
+            Args:
+                value (float): the value to check probability for
+                operation (Literal["equals", "greater", "less"]): the operation to check the probability for
+
+            Returns:
+                float: the probability of the operation for the input value
+            """
+            
+            if operation == "equals":
+                z = (value - self.mean) / self.sd
+                return stats.norm.cdf(z+0.005) - stats.norm.cdf(z-0.005)
+            elif operation == "greater":
+                z = (value - self.mean) / self.sd
+                return 1 - stats.norm.cdf(z)
+            elif operation == "less":
+                z = (value - self.mean) / self.sd
+                return stats.norm.cdf(z)
     
